@@ -1,0 +1,122 @@
+#!/bin/sh
+#$1 is the tax group to download--viral or bacteria etc
+#preliminary abundance estimation
+#parameters, exclude taxids, input filepath to FASTQ
+sudo rm -rf /home/dna/hariss/ncbi-genome-download/refseq/* /home/dna/hariss/minimap2/cumulative_alignment_tmp.sam /home/dna/hariss/minimap2/*mmi;
+sudo ./centrifuge -k 1 -p 1 --exclude-taxids 2,2157,2759 -q -x ../../centrifuge_h+p+v_uncompressed/p+h+v ../../centrifuge/mock_r9_combined_subset.fastq -S report
+awk -F"\t" '$9 >= 1 && $9!="inf" { print $0 }' centrifuge_report.tsv > prelim_abd_est
+awk -F"\t" '(!($2 == "taxID" )&&!($2 == "cohort" ) && !($2 == "1" ) &&
+!($2 == "family" ) &&  \
+!($2 == "genus" ) &&  \
+!($2 == "infraclass" )  && \
+!($2 == "infraorder" ) &&  \
+!($2 == "kingdom" ) &&  \
+!($2 == "no rank" ) &&  \
+!($2 == "order" ) &&  \
+!($2 == "parvorder" ) && \
+!($2 == "phylum" ) &&  \
+!($2 == "subclass" ) &&  \
+!($2 == "subfamily" ) &&  \
+!($2 == "subgenus" ) &&  \
+!($2 == "subkingdom" ) &&  \
+!($2 == "suborder" ) &&  \
+!($2 == "subphylum" ) &&  \
+!($2 == "subtribe" ) &&  \
+!($2 == "superclass" ) &&  \
+!($2 == "superfamily" ) &&  \
+!($2 == "superkingdom" ) &&  \
+!($2 == "superorder" ) &&  \
+!($2 == "superphylum" ) &&  \
+!($2 == "tribe" ) &&  \
+!($2 == "unclassified" )){print $2}' centrifuge_report.tsv > tax_id_to_be_aligned
+echo "PRINTING the number of individuals of a species present in amounts of >=1"
+cat prelim_abd_est
+
+#post-processing
+#collect unsure reads for alignment
+awk -F"\t" '(($2 == "cohort" ) ||  
+($2 == "family" ) ||  \
+($2 == "genus" ) ||  \
+($2 == "infraclass" )  || \
+($2 == "infraorder" ) ||  \
+($2 == "kingdom" ) ||  \
+($2 == "no rank" ) ||  \
+($2 == "order" ) ||  \
+($2 == "parvorder" ) || \
+($2 == "phylum" ) ||  \
+($2 == "subclass" ) ||  \
+($2 == "subfamily" ) ||  \
+($2 == "subgenus" ) ||  \
+($2 == "subkingdom" ) ||  \
+($2 == "suborder" ) ||  \
+($2 == "subphylum" ) ||  \
+($2 == "subtribe" ) ||  \
+($2 == "superclass" ) ||  \
+($2 == "superfamily" ) ||  \
+($2 == "superkingdom" ) ||  \
+($2 == "superorder" ) ||  \
+($2 == "superphylum" ) ||  \
+($2 == "tribe" ) ||  \
+($2 == "unclassified" )) { print NR }' report > unsure_list_tmp
+awk '$0="/tmp/ONT/"$0' unsure_list_tmp > unsure_list_tmp1
+sed 's/$/.fastq/' unsure_list_tmp1 > unsure_list
+cat $(cat unsure_list) > unsure.fastq
+echo "Unsure reads are collected for alignment"
+rm -rf unsure_list_tmp1 unsure_list_tmp;
+
+
+rm -rf /home/dna/hariss/ncbi-genome-download/refseq/$1/*;
+#downloading genomes from NCBI
+mkdir /home/dna/hariss/ncbi-genome-download/refseq/$1/;
+cd /home/dna/hariss/ncbi-genome-download/;
+cat /home/dna/hariss/centrifuge_new/centrifuge/tax_id_to_be_aligned  | while read line
+do
+./run_ncbi_genome_download  $line $1
+
+done
+
+
+#build index for minimap2 aligner
+cd /home/dna/hariss/minimap2/;
+#cat /home/dna/hariss/centrifuge_new/centrifuge/tax_id_to_be_aligned  | while read line
+#do
+#./minimap2 -x map-ont -d /home/dna/hariss/minimap2/$line.mmi /home/dna/hariss/ncbi-genome-download/refseq/$1/$line/*.fa
+#done
+
+
+#taking avg read length of the unsure list
+total=$(wc -l /home/dna/hariss/centrifuge_new/centrifuge/unsure.fastq | awk '{ print $1 }');
+total=$((total/ 4));
+total_bp=$(awk '!(NR%2)' /home/dna/hariss/centrifuge_new/centrifuge/unsure.fastq | wc -m)
+avg_rd_len=$(( total_bp/total ))
+echo $avg_rd_len > /home/dna/hariss/centrifuge_new/centrifuge/avg_rd_len.txt
+#alignment
+cat /home/dna/hariss/centrifuge_new/centrifuge/tax_id_to_be_aligned  | while read line
+do
+#./minimap2 -x map-ont -d /home/dna/hariss/ncbi-genome-download/refseq/$1/$line/$line.mmi /home/dna/hariss/ncbi-genome-download/refseq/$1/$line/$line.fa 
+#./minimap2 -a /home/dna/hariss/ncbi-genome-download/refseq/$1/$line/$line.mmi /home/dna/hariss/centrifuge_new/centrifuge/unsure.fastq > /home/dna/hariss/minimap2/$line.sam
+
+cat /home/dna/hariss/ncbi-genome-download/refseq/$1/$line/$line.fa >> /home/dna/hariss/ncbi-genome-download/refseq/$1/cumulative_genome.fa
+#tmp=$(awk '$2 == "4" {print $2}' /home/dna/hariss/minimap2/output.sam | wc -l);
+#echo $tmp, $total
+#match=$(( $total-$tmp ));
+#echo $match;
+#no_of_reads[$line]=$match;
+#echo $no_of_reads[$line];
+#no_of_bp[$line]=$(($no_of_reads[$line]*$avg_rd_len))
+#echo $no_of_bp[$line]
+
+
+
+done
+echo "::::::::::::::::::::::::::::Performaing alingment with Minimap2::::::::::::::::::::::::::::::"
+./minimap2 -x map-ont -d /home/dna/hariss/minimap2/cumulative_index.mmi /home/dna/hariss/ncbi-genome-download/refseq/$1/cumulative_genome.fa
+./minimap2 --secondary=no -a /home/dna/hariss/minimap2/cumulative_index.mmi /home/dna/hariss/centrifuge_new/centrifuge/unsure.fastq > /home/dna/hariss/minimap2/cumulative_alignment_tmp.sam
+
+#trim sam file output
+sed -r -n -e '/ncbi-genome-download/,${p}' /home/dna/hariss/minimap2/cumulative_alignment_tmp.sam | sed 1d > /home/dna/hariss/minimap2/cumulative_alignment.sam;
+
+echo ":::::::::::::::::::::::::ANALYZING ALIGNMENT RESULTS TO IMPROVE ABUNDANCE ESTIMATION:::::::::::::::::::::"
+#analyze alignment results and update abundance
+cd /home/dna/hariss/centrifuge_new/centrifuge
+python calc_abundance.py /home/dna/hariss/ncbi-genome-download/refseq/$1/
