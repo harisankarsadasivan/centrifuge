@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#$1-  path to FAST5s
+#$2- path to dump FASTQ's
+#3- number of files batched into a single FAST5
+#4 -- type of analysis -- viral or bacteria
+cd /home/dna/hariss/ont_core_cpp/ 
+/home/dna/hariss/ont_core_cpp/run_guppy2 $1 $2 $3
+#cd /home/dna/hariss/centrifuge_new/centrifuge/ 
+#./run_centrifuge $4
+
+
