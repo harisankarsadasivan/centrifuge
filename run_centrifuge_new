@@ -1,0 +1,128 @@
+#!/bin/sh
+#$1  is read file
+#$2  is the no of genome downloads to be waived in case downloaded manually when error is reported
+
+
+#configure read abundance threshold for centrifuge to finalize species list
+read_thresh=0.01; #set this to the number of taxids that need are manually downloaded and waived off for auto-download. This feeature is to be used if the refseq or genbank links are broken. They are being updated in Oct 2019 when we check the repo.
+flag=$2
+total_reads=$(awk -F"\t" '(!($3 == "taxRank" )&&!($3 == "cohort" ) && !($3 == "no rank" ) && \
+!($3 == "family" ) &&  \
+!($3 == "genus" ) &&  \
+!($3 == "infraclass" )  && \
+!($3 == "infraorder" ) &&  \
+!($3 == "kingdom" ) &&  \
+!($3 == "no rank" ) &&  \
+!($3 == "order" ) &&  \
+!($3 == "parvorder" ) && \
+!($3 == "phylum" ) &&  \
+!($3 == "subclass" ) &&  \
+!($3 == "subfamily" ) &&  \
+!($3 == "subgenus" ) &&  \
+!($3 == "subkingdom" ) &&  \
+!($3 == "suborder" ) &&  \
+!($3 == "subphylum" ) &&  \
+!($3 == "subtribe" ) &&  \
+!($3 == "superclass" ) &&  \
+!($3 == "superfamily" ) &&  \
+!($3 == "superkingdom" ) &&  \
+!($3 == "superorder" ) &&  \
+!($3 == "superphylum" ) &&  \
+!($3 == "tribe" ) &&  \
+!($3 == "unclassified" )){print $6}' centrifuge_report.tsv | awk '{sum+=$1}END{print sum}');
+
+awk -F"\t" '(!($3 == "taxRank" )&&!($3 == "cohort" ) && !($3 == "no rank" ) && \
+!($3 == "family" ) &&  \
+!($3 == "genus" ) &&  \
+!($3 == "infraclass" )  && \
+!($3 == "infraorder" ) &&  \
+!($3 == "kingdom" ) &&  \
+!($3 == "no rank" ) &&  \
+!($3 == "order" ) &&  \
+!($3 == "parvorder" ) && \
+!($3 == "phylum" ) &&  \
+!($3 == "subclass" ) &&  \
+!($3 == "subfamily" ) &&  \
+!($3 == "subgenus" ) &&  \
+!($3 == "subkingdom" ) &&  \
+!($3 == "suborder" ) &&  \
+!($3 == "subphylum" ) &&  \
+!($3 == "subtribe" ) &&  \
+!($3 == "superclass" ) &&  \
+!($3 == "superfamily" ) &&  \
+!($3 == "superkingdom" ) &&  \
+!($3 == "superorder" ) &&  \
+!($3 == "superphylum" ) &&  \
+!($3 == "tribe" ) &&  \
+!($3 == "unclassified" ) && ($5>='"$read_thresh*$total_reads"')){print $2}' centrifuge_report.tsv > tax_id_to_be_aligned;
+
+awk -F"\t" '(!($3 == "taxRank" )&&!($3 == "cohort" ) && !($3 == "no rank" ) &&  \
+!($3 == "family" ) &&  \
+!($3 == "genus" ) &&  \
+!($3 == "infraclass" )  && \
+!($3 == "infraorder" ) &&  \
+!($3 == "kingdom" ) &&  \
+!($3 == "no rank" ) &&  \
+!($3 == "order" ) &&  \
+!($3 == "parvorder" ) && \
+!($3 == "phylum" ) &&  \
+!($3 == "subclass" ) &&  \
+!($3 == "subfamily" ) &&  \
+!($3 == "subgenus" ) &&  \
+!($3 == "subkingdom" ) &&  \
+!($3 == "suborder" ) &&  \
+!($3 == "subphylum" ) &&  \
+!($3 == "subtribe" ) &&  \
+!($3 == "superclass" ) &&  \
+!($3 == "superfamily" ) &&  \
+!($3 == "superkingdom" ) &&  \
+!($3 == "superorder" ) &&  \
+!($3 == "superphylum" ) &&  \
+!($3 == "tribe" ) &&  \
+!($3 == "unclassified" ) && ($5>='"$read_thresh*$total_reads"')){print $4}' centrifuge_report.tsv > genome_len;
+
+ccache -c;
+rm -rf /media/dna/Archive/hari/ncbi-genome-download/refseq/;
+#downloading genomes from NCBI
+cd /media/dna/Archive/hari/ncbi-genome-download/;
+cat /media/dna/Archive/hari/centrifuge_new/centrifuge/tax_id_to_be_aligned  | while read line
+do
+./run_ncbi_genome_download_new  $line  all
+if [ $? -eq 1 ] 
+then
+
+if [ $flag -eq 0 ] 
+then
+echo Failed to find any assembly for $line. Make sure to download this and then set the waive flag
+
+exit 1;
+fi
+flag=$flag-1;
+fi
+
+done
+
+find . -type f -name "*.gz" -exec gunzip {} \;
+
+find . -name '*.gbff' -or -name '*.fasta' -or -name '*.fa' | xargs cat >> /media/dna/Archive/hari/minimap2/refined_genome.fa;
+
+
+#minimap alignment on all the reads
+cd /media/dna/Archive/hari/minimap2/;
+./minimap2 --secondary=no -t 4 -ax map-ont /media/dna/Archive/hari/minimap2/refined_genome.fa  $1 > output.sam
+
+
+
+
+#abundance estimation
+#awk -F' ' '{if ($2!=4 && substr($0,0,1)!="@") {print $0}}' $1 | cut -f1,2,3,10 | sort > log1;
+#
+#awk '!seen[$1]++' log1 > log2;
+#awk '{A[$3]+=length($4)}END{for(i in A)print i,A[i]}' log2 > log3;
+#awk -F' ' '{print $1}' log3 > log4;
+#./../edirect/edirect/esearch -db nucleotide -query "$(< log4)"|./../edirect/edirect/esummary|grep -i TaxId > log5;
+#./../edirect/edirect/esearch -db nucleotide -query "$(< log4)" |./../edirect/edirect/esummary|grep -i  Title > log7;
+#paste -d' ' log3 log5 log7 > log6;
+
+
+
