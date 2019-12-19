@@ -112,11 +112,12 @@ find . -type f -name "*.gz" -exec gunzip {} \;
 find . -name '*.fasta' -or -name '*.fa' -or -name '*.fna' | xargs cat >> /media/dna/Archive/hari/minimap2/refined_genome.fa;
 #
 #
+#remember to CAT human genome (impurity) with accession id listed here.
 ##minimap alignment on all the reads
 cd /media/dna/Archive/hari/minimap2/;
 ./minimap2 --secondary=no -t 4 -ax map-ont /media/dna/Archive/hari/minimap2/refined_genome.fa  $1 > output.sam
 
-#remember to CAT human genome (impurity) with accession id listed later.
+
 
 
 #abundance estimation
