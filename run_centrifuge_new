@@ -116,7 +116,7 @@ find . -name '*.fasta' -or -name '*.fa' -or -name '*.fna' | xargs cat >> /media/
 cd /media/dna/Archive/hari/minimap2/;
 ./minimap2 --secondary=no -t 4 -ax map-ont /media/dna/Archive/hari/minimap2/refined_genome.fa  $1 > output.sam
 
-
+#remember to CAT human genome (impurity) with accession id listed later.
 
 
 #abundance estimation
