@@ -2,10 +2,12 @@
 #$1  is read file
 #$2  is the no of genome downloads to be waived in case downloaded manually when error is reported
 
-
+cp -rf zymo_hela_mix_250.tsv centrifuge_report.tsv
 #configure read abundance threshold for centrifuge to finalize species list
-read_thresh=0.01; #set this to the number of taxids that need are manually downloaded and waived off for auto-download. This feeature is to be used if the refseq or genbank links are broken. They are being updated in Oct 2019 when we check the repo.
+#set this to the number of taxids that need are manually downloaded and waived off for auto-download. This feeature is to be used if the refseq or genbank links are broken. They are being updated in Oct 2019 when we check the repo.
 flag=$2
+read_thresh=0.00005; # to eliminate false positives. parameter found from zymo-hela mix, can be further tuned.
+upper_thresh=1
 total_reads=$(awk -F"\t" '(!($3 == "taxRank" )&&!($3 == "cohort" ) && !($3 == "no rank" ) && \
 !($3 == "family" ) &&  \
 !($3 == "genus" ) &&  \
@@ -54,7 +56,7 @@ awk -F"\t" '(!($3 == "taxRank" )&&!($3 == "cohort" ) && !($3 == "no rank" ) && \
 !($3 == "superorder" ) &&  \
 !($3 == "superphylum" ) &&  \
 !($3 == "tribe" ) &&  \
-!($3 == "unclassified" ) && ($5>='"$read_thresh*$total_reads"')){print $2}' centrifuge_report.tsv > tax_id_to_be_aligned;
+!($3 == "unclassified" ) && ($5>='"$read_thresh*$total_reads"') && ($5<='"$upper_thresh*$total_reads"')){print $2}' centrifuge_report.tsv > tax_id_to_be_aligned;
 
 awk -F"\t" '(!($3 == "taxRank" )&&!($3 == "cohort" ) && !($3 == "no rank" ) &&  \
 !($3 == "family" ) &&  \
@@ -79,13 +81,16 @@ awk -F"\t" '(!($3 == "taxRank" )&&!($3 == "cohort" ) && !($3 == "no rank" ) &&  
 !($3 == "superorder" ) &&  \
 !($3 == "superphylum" ) &&  \
 !($3 == "tribe" ) &&  \
-!($3 == "unclassified" ) && ($5>='"$read_thresh*$total_reads"')){print $4}' centrifuge_report.tsv > genome_len;
+!($3 == "unclassified" ) && ($5>='"$read_thresh*$total_reads"')){print $2,$4}' centrifuge_report.tsv > genome_len;
+
+python taxid_subset.py;
+
 
 ccache -c;
-rm -rf /media/dna/Archive/hari/ncbi-genome-download/refseq/;
+rm -rf /media/dna/Archive/hari/ncbi-genome-download/refseq/ /media/dna/Archive/hari/ncbi-genome-download/genbank/ /media/dna/Archive/hari/minimap2/refined_genome.fa;
 #downloading genomes from NCBI
 cd /media/dna/Archive/hari/ncbi-genome-download/;
-cat /media/dna/Archive/hari/centrifuge_new/centrifuge/tax_id_to_be_aligned  | while read line
+cat /media/dna/Archive/hari/centrifuge_new/centrifuge/new_tax_id_to_be_aligned  | while read line
 do
 ./run_ncbi_genome_download_new  $line  all
 if [ $? -eq 1 ] 
@@ -104,10 +109,10 @@ done
 
 find . -type f -name "*.gz" -exec gunzip {} \;
 
-find . -name '*.gbff' -or -name '*.fasta' -or -name '*.fa' | xargs cat >> /media/dna/Archive/hari/minimap2/refined_genome.fa;
-
-
-#minimap alignment on all the reads
+find . -name '*.fasta' -or -name '*.fa' -or -name '*.fna' | xargs cat >> /media/dna/Archive/hari/minimap2/refined_genome.fa;
+#
+#
+##minimap alignment on all the reads
 cd /media/dna/Archive/hari/minimap2/;
 ./minimap2 --secondary=no -t 4 -ax map-ont /media/dna/Archive/hari/minimap2/refined_genome.fa  $1 > output.sam
 
@@ -123,6 +128,5 @@ cd /media/dna/Archive/hari/minimap2/;
 #./../edirect/edirect/esearch -db nucleotide -query "$(< log4)"|./../edirect/edirect/esummary|grep -i TaxId > log5;
 #./../edirect/edirect/esearch -db nucleotide -query "$(< log4)" |./../edirect/edirect/esummary|grep -i  Title > log7;
 #paste -d' ' log3 log5 log7 > log6;
-
 
 
